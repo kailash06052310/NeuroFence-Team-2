@@ -1,28 +1,27 @@
 """
-NeuroFence
+NeuroFence Project
 
-Module:
-Activation Tracker
+Module: Activation Tracker
 
-Author:
-Rohan
+Author: Rohan
 
 Purpose:
-This module will monitor hidden layer activations
-of the LLM during inference.
-
-Current Status:
-Week 1 - Project Setup
-(No implementation yet)
+Monitor hidden layer activations of the LLM.
 """
+
 class ActivationTracker:
-    """
-    Activation Tracker Class
 
-    This class will later be responsible for:
-    - Tracking hidden layer activations
-    - Saving activation values
-    - Helping detect suspicious behavior
-    """
+    def __init__(self):
+        """Initialize the activation storage."""
+        self.activations = []
 
-    pass
+    def save_activation(self, layer_name, activation):
+        """Save activation values."""
+        self.activations.append({
+            "layer": layer_name,
+            "activation": activation
+        })
+
+    def get_activations(self):
+        """Return all stored activations."""
+        return self.activations
