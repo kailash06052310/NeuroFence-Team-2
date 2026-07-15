@@ -12,16 +12,17 @@ Monitor hidden layer activations of the LLM.
 class ActivationTracker:
 
     def __init__(self):
-        """Initialize the activation storage."""
-        self.activations = []
+        """Initialize activation storage."""
+        self.activations = {}
 
     def save_activation(self, layer_name, activation):
-        """Save activation values."""
-        self.activations.append({
-            "layer": layer_name,
-            "activation": activation
-        })
+        """Store activation for a layer."""
+        self.activations[layer_name] = activation
 
-    def get_activations(self):
+    def get_activation(self, layer_name):
+        """Return activation of a specific layer."""
+        return self.activations.get(layer_name)
+
+    def get_all_activations(self):
         """Return all stored activations."""
         return self.activations
