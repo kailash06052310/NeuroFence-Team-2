@@ -26,3 +26,7 @@ class ActivationTracker:
     def get_all_activations(self):
         """Return all stored activations."""
         return self.activations
+    
+    def clear_activations(self):
+        """Remove all stored activations."""
+        self.activations.clear()

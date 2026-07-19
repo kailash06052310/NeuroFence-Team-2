@@ -16,3 +16,8 @@ print()
 # Print all layers
 print("All Activations:")
 print(tracker.get_all_activations())
+
+tracker.clear_activations()
+
+print("\nAfter Clear:")
+print(tracker.get_all_activations())
