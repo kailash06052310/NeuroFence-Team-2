@@ -3,6 +3,7 @@ import torch
 from model_loader import ModelLoader
 from fuzzer import PromptFuzzer
 from activation_tracker import ActivationTracker
+from analyzer import Analyzer
 
 
 def main():
@@ -26,41 +27,72 @@ def main():
     # Initialize Prompt Fuzzer
     fuzzer = PromptFuzzer()
 
-    # Select first normal prompt
-    prompt = fuzzer.get_normal_prompts()[0]
+    # Initialize Analyzer
+    analyzer = Analyzer()
 
-    print(f"\nTesting Prompt:\n{prompt}")
+    # -----------------------------
+    # STEP 1 : Create Baseline
+    # -----------------------------
 
-    # Tokenize prompt
-    inputs = tokenizer(prompt, return_tensors="pt")
+    baseline_prompt = fuzzer.get_normal_prompts()[0]
 
-    # Run inference
+    print("\nCreating Baseline...")
+    print(f"Prompt: {baseline_prompt}")
+
+    tracker.clear_activations()
+
+    inputs = tokenizer(baseline_prompt, return_tensors="pt")
+
+    with torch.no_grad():
+        model(**inputs)
+
+    baseline_activations = tracker.get_all_activations()
+
+    analyzer.create_baseline(baseline_activations)
+
+    print("✓ Baseline Created Successfully.")
+
+    # -----------------------------
+    # STEP 2 : Test Another Prompt
+    # -----------------------------
+
+    test_prompt = fuzzer.get_adversarial_prompts()[0]
+
+    print(f"\nTesting Prompt:\n{test_prompt}")
+
+    tracker.clear_activations()
+
+    inputs = tokenizer(test_prompt, return_tensors="pt")
+
     with torch.no_grad():
         outputs = model(**inputs)
 
     print("\n✓ Model executed successfully.")
     print("Logits Shape:", outputs.logits.shape)
 
-    # Display captured activations
-    print("\nCaptured Activations")
-    print("----------------------")
+    current_activations = tracker.get_all_activations()
 
-    activations = tracker.get_all_activations()
+    # -----------------------------
+    # STEP 3 : Compare Activations
+    # -----------------------------
 
-    if len(activations) == 0:
-        print("No activations captured.")
+    comparison = analyzer.compare_with_baseline(
+        current_activations
+    )
 
-    else:
-        for layer_name, activation in activations.items():
+    report = analyzer.generate_report(comparison)
 
-            # Some HuggingFace models return tuple outputs
-            if isinstance(activation, tuple):
-                activation = activation[0]
+    print("\n========== Analysis Report ==========")
 
-            if hasattr(activation, "shape"):
-                print(f"{layer_name} -> {activation.shape}")
-            else:
-                print(f"{layer_name} -> {type(activation)}")
+    for layer, result in report.items():
+
+        print(
+            f"{layer} | "
+            f"Difference: {result['difference']} | "
+            f"Risk: {result['risk']}"
+        )
+
+    print("=====================================")
 
     # Remove hooks
     tracker.remove_hooks()
