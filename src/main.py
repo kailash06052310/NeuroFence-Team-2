@@ -1,23 +1,10 @@
-from activation_tracker import ActivationTracker
+from model_loader import ModelLoader
 
-# Create object
-tracker = ActivationTracker()
+# Create ModelLoader object
+loader = ModelLoader()
 
-# Store activation values
-tracker.save_activation("Layer_1", [0.12, 0.45, 0.78])
-tracker.save_activation("Layer_2", [0.31, 0.65, 0.92])
+# Load model and tokenizer
+model, tokenizer = loader.load_model()
 
-# Print one layer
-print("Layer_1:")
-print(tracker.get_activation("Layer_1"))
-
-print()
-
-# Print all layers
-print("All Activations:")
-print(tracker.get_all_activations())
-
-tracker.clear_activations()
-
-print("\nAfter Clear:")
-print(tracker.get_all_activations())
+print("\n✅ Model Loaded Successfully!")
+print(type(model))
