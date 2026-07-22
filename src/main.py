@@ -34,66 +34,67 @@ def main():
     # STEP 1 : Create Baseline
     # -----------------------------
 
-    baseline_prompt = fuzzer.get_normal_prompts()[0]
+    print("\n========== Creating Baselines ==========")
 
-    print("\nCreating Baseline...")
-    print(f"Prompt: {baseline_prompt}")
+    normal_prompts = fuzzer.get_normal_prompts()[:5]
 
-    tracker.clear_activations()
+    baseline_list = []
 
-    inputs = tokenizer(baseline_prompt, return_tensors="pt")
+    for i, prompt in enumerate(normal_prompts, start=1):
 
-    with torch.no_grad():
-        model(**inputs)
+        print(f"\nBaseline {i}: {prompt}")
 
-    baseline_activations = tracker.get_all_activations()
+        tracker.clear_activations()
 
-    analyzer.create_baseline(baseline_activations)
+        inputs = tokenizer(prompt, return_tensors="pt")
 
-    print("✓ Baseline Created Successfully.")
+        with torch.no_grad():
+            model(**inputs)
+
+        baseline_activations = tracker.get_all_activations()
+
+        analyzer.create_baseline(baseline_activations)
+
+        baseline_list.append(prompt)
+
+    print("\n✓ 5 Baseline Prompts Processed Successfully.")
 
     # -----------------------------
     # STEP 2 : Test Another Prompt
     # -----------------------------
 
-    test_prompt = fuzzer.get_adversarial_prompts()[0]
+    print("\n========== Testing Adversarial Prompts ==========")
 
-    print(f"\nTesting Prompt:\n{test_prompt}")
+    test_prompts = fuzzer.get_adversarial_prompts()[:5]
 
-    tracker.clear_activations()
+    for i, test_prompt in enumerate(test_prompts, start=1):
 
-    inputs = tokenizer(test_prompt, return_tensors="pt")
+        print(f"\nTest {i}: {test_prompt}")
 
-    with torch.no_grad():
-        outputs = model(**inputs)
+        tracker.clear_activations()
 
-    print("\n✓ Model executed successfully.")
-    print("Logits Shape:", outputs.logits.shape)
+        inputs = tokenizer(test_prompt, return_tensors="pt")
 
-    current_activations = tracker.get_all_activations()
+        with torch.no_grad():
+            outputs = model(**inputs)
 
-    # -----------------------------
-    # STEP 3 : Compare Activations
-    # -----------------------------
+        current_activations = tracker.get_all_activations()
 
-    comparison = analyzer.compare_with_baseline(
-        current_activations
-    )
+        comparison = analyzer.compare_with_baseline(current_activations)
 
-    report = analyzer.generate_report(comparison)
+        report = analyzer.generate_report(comparison)
 
-    print("\n========== Analysis Report ==========")
+        print("Analysis Report:")
 
-    for layer, result in report.items():
+        for layer, result in report.items():
 
-        print(
-            f"{layer} | "
-            f"Difference: {result['difference']} | "
-            f"Risk: {result['risk']}"
-        )
+            print(
+                f"{layer} | "
+                f"Difference: {result['difference']} | "
+                f"Risk: {result['risk']}"
+            )
 
-    print("=====================================")
-
+        print("------------------------------------")
     # Remove hooks
     tracker.remove_hooks()
 
