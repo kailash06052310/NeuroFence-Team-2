@@ -78,6 +78,15 @@ class Analyzer:
         if isinstance(current_activation, tuple):
             current_activation = current_activation[0]
 
+        # Match sequence lengths before comparison
+        min_length = min(
+            baseline_activation.shape[1],
+            current_activation.shape[1]
+        )
+
+        baseline_activation = baseline_activation[:, :min_length, :]
+        current_activation = current_activation[:, :min_length, :]
+
         difference = torch.mean(
             torch.abs(current_activation - baseline_activation)
         )

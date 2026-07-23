@@ -1,4 +1,5 @@
 import torch
+from detection_logic import DetectionLogic
 
 from model_loader import ModelLoader
 from fuzzer import PromptFuzzer
@@ -29,7 +30,8 @@ def main():
 
     # Initialize Analyzer
     analyzer = Analyzer()
-
+    # Initialize Detection Logic
+    detector = DetectionLogic()
     # -----------------------------
     # STEP 1 : Create Baseline
     # -----------------------------
@@ -95,6 +97,16 @@ def main():
             )
 
         print("------------------------------------")
+        # -----------------------------
+        # STEP 4 : Detection Result
+        # -----------------------------
+
+        detection_result = detector.detect(comparison)
+
+        print("\n========== Detection Result ==========")
+        print(f"Risk Score : {detection_result['risk_score']}")
+        print(f"Verdict    : {detection_result['verdict']}")
+        print("======================================")
     # Remove hooks
     tracker.remove_hooks()
 
