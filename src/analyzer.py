@@ -42,6 +42,57 @@ class Analyzer:
 
         print(f"✓ Baseline created for {len(self.baseline)} layers.")
 
+    def create_average_baseline(self, baseline_list):
+        """
+        Create an average baseline from multiple activation dictionaries.
+
+        Parameters:
+            baseline_list (list): List of activation dictionaries.
+        """
+
+        self.baseline.clear()
+
+        if not baseline_list:
+            return
+
+        layer_names = baseline_list[0].keys()
+
+        for layer_name in layer_names:
+
+            activations = []
+
+            for activation_dict in baseline_list:
+
+                activation = activation_dict[layer_name]
+
+                if isinstance(activation, tuple):
+                    activation = activation[0]
+
+                activations.append(activation)
+
+            # Match sequence lengths before averaging
+            min_length = min(
+                activation.shape[1]
+                for activation in activations
+            )
+
+            trimmed_activations = []
+
+            for activation in activations:
+                trimmed_activations.append(
+                    activation[:, :min_length, :]
+                )
+
+            average_activation = torch.mean(
+                torch.stack(trimmed_activations),
+                dim=0
+            )
+
+            self.baseline[layer_name] = average_activation.clone()
+
+        print(
+            f"✓ Average baseline created using {len(baseline_list)} prompts."
+        )
     def has_baseline(self):
         """
         Check whether a baseline exists.

@@ -1,5 +1,7 @@
 import torch
 from detection_logic import DetectionLogic
+from report_generator import ReportGenerator
+from pdf_report import PDFReportGenerator
 
 from model_loader import ModelLoader
 from fuzzer import PromptFuzzer
@@ -30,13 +32,17 @@ def main():
 
     # Initialize Analyzer
     analyzer = Analyzer()
+
     # Initialize Detection Logic
     detector = DetectionLogic()
+    report_generator = ReportGenerator()
+    pdf_generator = PDFReportGenerator()
+
     # -----------------------------
-    # STEP 1 : Create Baseline
+    # STEP 1 : Create Average Baseline
     # -----------------------------
 
-    print("\n========== Creating Baselines ==========")
+    print("\n========== Creating Average Baseline ==========")
 
     normal_prompts = fuzzer.get_normal_prompts()[:5]
 
@@ -55,14 +61,16 @@ def main():
 
         baseline_activations = tracker.get_all_activations()
 
-        analyzer.create_baseline(baseline_activations)
+        # Store activations instead of prompt
+        baseline_list.append(baseline_activations)
 
-        baseline_list.append(prompt)
+    # Create one average baseline
+    analyzer.create_average_baseline(baseline_list)
 
-    print("\n✓ 5 Baseline Prompts Processed Successfully.")
+    print("\n✓ Average Baseline Created Successfully.")
 
     # -----------------------------
-    # STEP 2 : Test Another Prompt
+    # STEP 2 : Test Adversarial Prompts
     # -----------------------------
 
     print("\n========== Testing Adversarial Prompts ==========")
@@ -78,7 +86,7 @@ def main():
         inputs = tokenizer(test_prompt, return_tensors="pt")
 
         with torch.no_grad():
-            outputs = model(**inputs)
+            model(**inputs)
 
         current_activations = tracker.get_all_activations()
 
@@ -86,7 +94,7 @@ def main():
 
         report = analyzer.generate_report(comparison)
 
-        print("Analysis Report:")
+        print("\nAnalysis Report:")
 
         for layer, result in report.items():
 
@@ -96,17 +104,24 @@ def main():
                 f"Risk: {result['risk']}"
             )
 
-        print("------------------------------------")
         # -----------------------------
-        # STEP 4 : Detection Result
+        # STEP 3 : Detection Result
         # -----------------------------
 
         detection_result = detector.detect(comparison)
+        report_generator.add_result(
+            prompt=test_prompt,
+            comparison=comparison,
+            risk_score=detection_result["risk_score"],
+            verdict=detection_result["verdict"]
+        )
 
         print("\n========== Detection Result ==========")
         print(f"Risk Score : {detection_result['risk_score']}")
         print(f"Verdict    : {detection_result['verdict']}")
         print("======================================")
+    report_generator.save_report()
+    pdf_generator.generate()
     # Remove hooks
     tracker.remove_hooks()
 
