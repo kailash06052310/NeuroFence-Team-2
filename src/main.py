@@ -1,4 +1,5 @@
 import torch
+
 from detection_logic import DetectionLogic
 from report_generator import ReportGenerator
 from pdf_report import PDFReportGenerator
@@ -9,40 +10,73 @@ from activation_tracker import ActivationTracker
 from analyzer import Analyzer
 
 
-def main():
+# --------------------------------------------------
+# Logging Helper
+# --------------------------------------------------
 
-    # Load model
-    loader = ModelLoader()
-    model, tokenizer = loader.load_model()
+def log(message, log_callback=None):
 
-    print("\n==============================")
-    print(" NeuroFence")
-    print("==============================")
+    if log_callback:
+        log_callback(message)
 
-    print(f"\nModel Loaded : {loader.model_name}")
+    else:
+        print(message)
 
-    # Initialize Activation Tracker
+
+# --------------------------------------------------
+# Main Pipeline
+# --------------------------------------------------
+
+def main(
+    model=None,
+    tokenizer=None,
+    log_callback=None
+):
+
+    # ------------------------------------
+    # Load Model (Only if not already loaded)
+    # ------------------------------------
+
+    if model is None or tokenizer is None:
+
+        loader = ModelLoader()
+        model, tokenizer = loader.load_model()
+
+        model_name = loader.model_name
+
+    else:
+
+        model_name = "Loaded from GUI"
+
+    log("\n==============================", log_callback)
+    log(" NeuroFence", log_callback)
+    log("==============================", log_callback)
+
+    log(f"\nModel Loaded : {model_name}", log_callback)
+
+    # ------------------------------------
+    # Initialize Components
+    # ------------------------------------
+
     tracker = ActivationTracker()
 
-    # Register hooks
     tracker.register_hooks(model)
 
-    # Initialize Prompt Fuzzer
     fuzzer = PromptFuzzer()
 
-    # Initialize Analyzer
     analyzer = Analyzer()
 
-    # Initialize Detection Logic
     detector = DetectionLogic()
+
     report_generator = ReportGenerator()
+
     pdf_generator = PDFReportGenerator()
 
-    # -----------------------------
+    # ------------------------------------
     # STEP 1 : Create Average Baseline
-    # -----------------------------
+    # ------------------------------------
 
-    print("\n========== Creating Average Baseline ==========")
+    log("\n========== Creating Average Baseline ==========", log_callback)
 
     normal_prompts = fuzzer.get_normal_prompts()[:5]
 
@@ -50,65 +84,86 @@ def main():
 
     for i, prompt in enumerate(normal_prompts, start=1):
 
-        print(f"\nBaseline {i}: {prompt}")
+        log(f"\nBaseline {i}: {prompt}", log_callback)
 
         tracker.clear_activations()
 
-        inputs = tokenizer(prompt, return_tensors="pt")
+        inputs = tokenizer(
+            prompt,
+            return_tensors="pt"
+        )
 
         with torch.no_grad():
             model(**inputs)
 
         baseline_activations = tracker.get_all_activations()
 
-        # Store activations instead of prompt
-        baseline_list.append(baseline_activations)
+        baseline_list.append(
+            baseline_activations
+        )
 
-    # Create one average baseline
-    analyzer.create_average_baseline(baseline_list)
+    analyzer.create_average_baseline(
+        baseline_list
+    )
 
-    print("\n✓ Average Baseline Created Successfully.")
-
-    # -----------------------------
+    log(
+        "\n✓ Average Baseline Created Successfully.",
+        log_callback
+    )
+        # ------------------------------------
     # STEP 2 : Test Adversarial Prompts
-    # -----------------------------
+    # ------------------------------------
 
-    print("\n========== Testing Adversarial Prompts ==========")
+    log(
+        "\n========== Testing Adversarial Prompts ==========",
+        log_callback
+    )
 
     test_prompts = fuzzer.get_adversarial_prompts()[:5]
 
     for i, test_prompt in enumerate(test_prompts, start=1):
 
-        print(f"\nTest {i}: {test_prompt}")
+        log(f"\nTest {i}: {test_prompt}", log_callback)
 
         tracker.clear_activations()
 
-        inputs = tokenizer(test_prompt, return_tensors="pt")
+        inputs = tokenizer(
+            test_prompt,
+            return_tensors="pt"
+        )
 
         with torch.no_grad():
             model(**inputs)
 
         current_activations = tracker.get_all_activations()
 
-        comparison = analyzer.compare_with_baseline(current_activations)
+        comparison = analyzer.compare_with_baseline(
+            current_activations
+        )
 
-        report = analyzer.generate_report(comparison)
+        report = analyzer.generate_report(
+            comparison
+        )
 
-        print("\nAnalysis Report:")
+        log("\nAnalysis Report:", log_callback)
 
         for layer, result in report.items():
 
-            print(
+            log(
                 f"{layer} | "
                 f"Difference: {result['difference']} | "
-                f"Risk: {result['risk']}"
+                f"Risk: {result['risk']}",
+                log_callback
             )
 
-        # -----------------------------
-        # STEP 3 : Detection Result
-        # -----------------------------
+        # ------------------------------------
+        # Detection Result
+        # ------------------------------------
 
-        detection_result = detector.detect(comparison)
+        detection_result = detector.detect(
+            comparison
+        )
+
         report_generator.add_result(
             prompt=test_prompt,
             comparison=comparison,
@@ -116,15 +171,60 @@ def main():
             verdict=detection_result["verdict"]
         )
 
-        print("\n========== Detection Result ==========")
-        print(f"Risk Score : {detection_result['risk_score']}")
-        print(f"Verdict    : {detection_result['verdict']}")
-        print("======================================")
+        log(
+            "\n========== Detection Result ==========",
+            log_callback
+        )
+
+        log(
+            f"Risk Score : {detection_result['risk_score']}",
+            log_callback
+        )
+
+        log(
+            f"Verdict    : {detection_result['verdict']}",
+            log_callback
+        )
+
+        log(
+            "======================================",
+            log_callback
+        )
+
+    # ------------------------------------
+    # Save Reports
+    # ------------------------------------
+
     report_generator.save_report()
+
+    log(
+        "\n✓ JSON Report Saved Successfully.",
+        log_callback
+    )
+
     pdf_generator.generate()
-    # Remove hooks
+
+    log(
+        "✓ PDF Report Generated Successfully.",
+        log_callback
+    )
+
+    # ------------------------------------
+    # Cleanup
+    # ------------------------------------
+
     tracker.remove_hooks()
 
+    log(
+        "\n✓ NeuroFence Analysis Completed.",
+        log_callback
+    )
+
+
+# ------------------------------------
+# Run from CLI
+# ------------------------------------
 
 if __name__ == "__main__":
+
     main()
