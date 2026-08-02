@@ -163,13 +163,22 @@ def main(
         detection_result = detector.detect(
             comparison
         )
-
         report_generator.add_result(
             prompt=test_prompt,
             comparison=comparison,
             risk_score=detection_result["risk_score"],
-            verdict=detection_result["verdict"]
-        )
+            verdict=detection_result["verdict"],
+
+            # New Detection Metrics
+            confidence_score=detection_result["confidence_score"],
+            average_difference=detection_result["average_difference"],
+            maximum_difference=detection_result["maximum_difference"],
+            high_risk_layers=detection_result["high_risk_layers"],
+            total_layers=detection_result["total_layers"],
+            high_risk_percentage=detection_result["high_risk_percentage"],
+            reason=detection_result["reason"],
+            thresholds=detection_result["thresholds"]
+)
 
         log(
             "\n========== Detection Result ==========",
@@ -185,7 +194,32 @@ def main(
             f"Verdict    : {detection_result['verdict']}",
             log_callback
         )
+        log(
+            f"Confidence : {detection_result['confidence_score']}%",
+            log_callback
+        )
 
+        log(
+            f"Avg Diff   : {detection_result['average_difference']}",
+            log_callback
+        )
+
+        log(
+            f"Max Diff   : {detection_result['maximum_difference']}",
+            log_callback
+        )
+
+        log(
+            f"High Layers: "
+            f"{detection_result['high_risk_layers']} / "
+            f"{detection_result['total_layers']}",
+            log_callback
+        )
+
+        log(
+            f"Reason     : {detection_result['reason']}",
+            log_callback
+        )
         log(
             "======================================",
             log_callback
