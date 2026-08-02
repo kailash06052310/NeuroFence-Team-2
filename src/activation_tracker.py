@@ -132,3 +132,54 @@ class ActivationTracker:
         self.hooks.clear()
 
         print("✓ All hooks removed.")
+
+    def get_total_layers(self):
+        """
+        Return total number of stored activations.
+
+        Returns:
+            int
+        """
+        return len(self.activations)
+
+    def get_layer_names(self):
+        """
+        Return all stored layer names.
+
+        Returns:
+            list
+        """
+        return list(self.activations.keys())
+
+    def has_activations(self):
+        """
+        Check whether activations are available.
+
+        Returns:
+            bool
+        """
+        return len(self.activations) > 0
+
+    def get_activation_summary(self):
+        """
+        Return summary of stored activations.
+
+        Returns:
+            dict
+        """
+        return {
+            "total_layers": self.get_total_layers(),
+            "layer_names": self.get_layer_names(),
+            "has_activations": self.has_activations()
+        }
+if __name__ == "__main__":
+
+    tracker = ActivationTracker()
+
+    tracker.save_activation("Layer_0", [1, 2, 3])
+    tracker.save_activation("Layer_1", [4, 5, 6])
+
+    print("Total Layers :", tracker.get_total_layers())
+    print("Layer Names  :", tracker.get_layer_names())
+    print("Has Data     :", tracker.has_activations())
+    print("Summary      :", tracker.get_activation_summary())
