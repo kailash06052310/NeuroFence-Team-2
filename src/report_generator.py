@@ -7,7 +7,8 @@ Author: Kailash
 
 Purpose:
 Generate a JSON security report containing
-prompt, layer differences, risk score and verdict.
+prompt, layer differences, risk score, verdict,
+and additional detection metrics.
 """
 
 import json
@@ -17,6 +18,7 @@ from datetime import datetime
 class ReportGenerator:
 
     def __init__(self, filename="report.json"):
+
         self.filename = filename
         self.results = []
 
@@ -25,7 +27,15 @@ class ReportGenerator:
         prompt,
         comparison,
         risk_score,
-        verdict
+        verdict,
+        confidence_score=None,
+        average_difference=None,
+        maximum_difference=None,
+        high_risk_layers=None,
+        total_layers=None,
+        high_risk_percentage=None,
+        reason=None,
+        thresholds=None
     ):
 
         result = {
@@ -33,6 +43,18 @@ class ReportGenerator:
             "prompt": prompt,
             "risk_score": risk_score,
             "verdict": verdict,
+
+            # New Detection Metrics
+            "confidence_score": confidence_score,
+            "average_difference": average_difference,
+            "maximum_difference": maximum_difference,
+            "high_risk_layers": high_risk_layers,
+            "total_layers": total_layers,
+            "high_risk_percentage": high_risk_percentage,
+            "reason": reason,
+            "thresholds": thresholds,
+
+            # Existing Layer Analysis
             "layer_differences": comparison
         }
 

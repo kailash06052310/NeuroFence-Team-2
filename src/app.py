@@ -403,13 +403,15 @@ font-size:13px;
 
     def report_action(self):
 
-        import os
+        pdf_path = "Security_Report.pdf"
 
-        if os.path.exists("Security_Report.pdf"):
+        if os.path.exists(pdf_path):
 
             self.console.append(
-                "\n[SUCCESS] Security_Report.pdf is available."
+                "\n[SUCCESS] Opening Security_Report.pdf..."
             )
+
+            os.startfile(pdf_path)
 
         else:
 
