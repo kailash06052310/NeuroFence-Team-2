@@ -1,55 +1,51 @@
-"""
-NeuroFence Desktop UI
-Compatible with NeuroFence Backend
-
-Author:
-Prithvi UI + Kailash Backend Integration
-"""
+# NeuroFence Forensic Desktop UI Application
 
 import sys
 import os
 
+# --------------------------------------------------
+# Path Setup
+# --------------------------------------------------
+
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(CURRENT_DIR)
+
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
+if CURRENT_DIR not in sys.path:
+    sys.path.insert(0, CURRENT_DIR)
+
+
+# --------------------------------------------------
+# PyQt6 Imports
+# --------------------------------------------------
+
 from PyQt6.QtWidgets import (
     QApplication,
     QMainWindow,
-    QWidget,
     QLabel,
     QPushButton,
-    QTextEdit,
     QVBoxLayout,
     QHBoxLayout,
+    QWidget,
+    QTextEdit
 )
 
-from PyQt6.QtCore import Qt, QObject, QThread, pyqtSignal
-
-from model_loader import ModelLoader
-from main import main
+from PyQt6.QtCore import Qt
 
 
-# ------------------------------------
-# Worker Thread
-# ------------------------------------
+# --------------------------------------------------
+# NeuroFence Imports
+# --------------------------------------------------
 
-class AnalysisWorker(QObject):
-
-    finished = pyqtSignal()
-
-    log_signal = pyqtSignal(str)
-
-    def run(self):
-
-        try:
-            main(log_callback=self.log_signal.emit)
-
-        except Exception as e:
-            self.log_signal.emit(f"\n[ERROR] {e}")
-
-        self.finished.emit()
+from analyzer import Analyzer
+from pdf_report import PDFReportGenerator
 
 
-# ------------------------------------
-# Main Window
-# ------------------------------------
+# --------------------------------------------------
+# Main Application
+# --------------------------------------------------
 
 class NeuroFenceApp(QMainWindow):
 
@@ -57,372 +53,358 @@ class NeuroFenceApp(QMainWindow):
 
         super().__init__()
 
+        # Window settings
         self.setWindowTitle(
-            "NeuroFence - LLM Security Scanner"
+            "NeuroFence - LLM Forensic & Security Suite v1.0"
         )
 
         self.setGeometry(
-            150,
-            80,
-            900,
-            600
+            100,
+            100,
+            850,
+            580
         )
 
-        self.loader = None
+        # Application state
+        self.is_dark_mode = True
+        self.analyzer = None
+        self.latest_analysis_results = None
 
-        self.model_loaded = False
-
-        self.is_dark = True
-
-        self.thread = None
-
-        self.worker = None
-
-        # --------------------
+        # --------------------------------------------------
         # Central Widget
-        # --------------------
+        # --------------------------------------------------
 
-        central = QWidget()
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
 
-        self.setCentralWidget(central)
+        main_layout = QVBoxLayout()
 
-        layout = QVBoxLayout()
-
-        # --------------------
+        # --------------------------------------------------
         # Header
-        # --------------------
+        # --------------------------------------------------
 
-        header = QHBoxLayout()
+        header_layout = QHBoxLayout()
 
-        self.title = QLabel(
-            "🚀 NeuroFence Security Dashboard"
+        self.title_label = QLabel(
+            "🚀 NeuroFence Forensic Desktop Dashboard"
         )
 
-        self.title.setAlignment(
-            Qt.AlignmentFlag.AlignLeft
+        self.title_label.setAlignment(
+            Qt.AlignmentFlag.AlignLeft |
+            Qt.AlignmentFlag.AlignVCenter
         )
 
-        self.theme_button = QPushButton(
+        self.btn_theme = QPushButton(
             "☀️ Light Mode"
         )
 
-        self.theme_button.clicked.connect(
+        self.btn_theme.setFixedWidth(130)
+
+        self.btn_theme.clicked.connect(
             self.toggle_theme
         )
 
-        header.addWidget(self.title)
-
-        header.addStretch()
-
-        header.addWidget(
-            self.theme_button
+        header_layout.addWidget(
+            self.title_label
         )
 
-        layout.addLayout(header)
+        header_layout.addStretch()
 
-        # --------------------
-        # Buttons
-        # --------------------
+        header_layout.addWidget(
+            self.btn_theme
+        )
 
-        buttons = QHBoxLayout()
+        main_layout.addLayout(
+            header_layout
+        )
 
-        self.load_button = QPushButton(
+        # --------------------------------------------------
+        # Control Buttons
+        # --------------------------------------------------
+
+        btn_layout = QHBoxLayout()
+
+        self.btn_load = QPushButton(
             "📁 Load Model"
         )
 
-        self.run_button = QPushButton(
-            "🔍 Run Analysis"
+        self.btn_analyze = QPushButton(
+            "🔍 Run Forensic Analysis"
         )
 
-        self.report_button = QPushButton(
-            "📄 Open Report Status"
+        self.btn_report = QPushButton(
+            "📄 Generate PDF Report"
         )
 
-        buttons.addWidget(
-            self.load_button
+        btn_layout.addWidget(
+            self.btn_load
         )
 
-        buttons.addWidget(
-            self.run_button
+        btn_layout.addWidget(
+            self.btn_analyze
         )
 
-        buttons.addWidget(
-            self.report_button
+        btn_layout.addWidget(
+            self.btn_report
         )
 
-        layout.addLayout(buttons)
-
-        # --------------------
-        # Output Console
-        # --------------------
-
-        self.console = QTextEdit()
-
-        self.console.setReadOnly(True)
-
-        self.console.setPlaceholderText(
-            "Execution logs will appear here..."
+        main_layout.addLayout(
+            btn_layout
         )
 
-        layout.addWidget(self.console)
+        # --------------------------------------------------
+        # Result / Log Area
+        # --------------------------------------------------
 
-        central.setLayout(layout)
+        self.result_area = QTextEdit()
 
-        # --------------------
+        self.result_area.setReadOnly(
+            True
+        )
+
+        self.result_area.setPlaceholderText(
+            "Execution logs and analysis results will appear here..."
+        )
+
+        main_layout.addWidget(
+            self.result_area
+        )
+
+        # --------------------------------------------------
         # Button Connections
-        # --------------------
+        # --------------------------------------------------
 
-        self.load_button.clicked.connect(
+        self.btn_load.clicked.connect(
             self.load_model_action
         )
 
-        self.run_button.clicked.connect(
+        self.btn_analyze.clicked.connect(
             self.run_analysis_action
         )
 
-        self.report_button.clicked.connect(
-            self.report_action
+        self.btn_report.clicked.connect(
+            self.generate_report_action
         )
 
+        central_widget.setLayout(
+            main_layout
+        )
+
+        # Initial theme
         self.apply_dark_theme()
 
-    # --------------------------------
+
+    # ==================================================
+    # Theme
+    # ==================================================
 
     def toggle_theme(self):
 
-        if self.is_dark:
+        if self.is_dark_mode:
 
             self.apply_light_theme()
 
-            self.theme_button.setText(
+            self.btn_theme.setText(
                 "🌙 Dark Mode"
             )
 
-            self.is_dark = False
+            self.is_dark_mode = False
 
         else:
 
             self.apply_dark_theme()
 
-            self.theme_button.setText(
+            self.btn_theme.setText(
                 "☀️ Light Mode"
             )
 
-            self.is_dark = True
+            self.is_dark_mode = True
 
-    # --------------------------------
 
     def apply_dark_theme(self):
 
-        self.setStyleSheet("""
+        self.setStyleSheet(
+            """
+            QMainWindow {
+                background-color: #0F172A;
+            }
 
-QMainWindow{
-background:#0F172A;
-}
+            QLabel {
+                color: #38BDF8;
+                font-size: 20px;
+                font-weight: bold;
+            }
 
-QLabel{
-color:#38BDF8;
-font-size:20px;
-font-weight:bold;
-}
+            QPushButton {
+                background-color: #1E293B;
+                color: #38BDF8;
+                border: 1px solid #334155;
+                border-radius: 6px;
+                font-size: 13px;
+                padding: 8px 12px;
+                font-weight: bold;
+            }
 
-QPushButton{
+            QPushButton:hover {
+                background-color: #334155;
+                color: #7DD3FC;
+            }
 
-background:#1E293B;
+            QTextEdit {
+                background-color: #020617;
+                color: #38BDF8;
+                border: 1px solid #1E293B;
+                border-radius: 6px;
+                font-family: 'Consolas', monospace;
+                font-size: 13px;
+                padding: 10px;
+            }
+            """
+        )
 
-color:#38BDF8;
-
-border:1px solid #334155;
-
-border-radius:6px;
-
-padding:8px;
-
-font-weight:bold;
-
-}
-
-QPushButton:hover{
-
-background:#334155;
-
-}
-
-QTextEdit{
-
-background:#020617;
-
-color:#38BDF8;
-
-border:1px solid #334155;
-
-font-family:Consolas;
-
-font-size:13px;
-
-}
-
-""")
-
-    # --------------------------------
 
     def apply_light_theme(self):
 
-        self.setStyleSheet("""
+        self.setStyleSheet(
+            """
+            QMainWindow {
+                background-color: #F8FAFC;
+            }
 
-QMainWindow{
-background:white;
-}
+            QLabel {
+                color: #0F172A;
+                font-size: 20px;
+                font-weight: bold;
+            }
 
-QLabel{
+            QPushButton {
+                background-color: #FFFFFF;
+                color: #0284C7;
+                border: 1px solid #CBD5E1;
+                border-radius: 6px;
+                font-size: 13px;
+                padding: 8px 12px;
+                font-weight: bold;
+            }
 
-color:black;
+            QPushButton:hover {
+                background-color: #E2E8F0;
+                color: #0369A1;
+            }
 
-font-size:20px;
+            QTextEdit {
+                background-color: #FFFFFF;
+                color: #0F172A;
+                border: 1px solid #CBD5E1;
+                border-radius: 6px;
+                font-family: 'Consolas', monospace;
+                font-size: 13px;
+                padding: 10px;
+            }
+            """
+        )
 
-font-weight:bold;
 
-}
-
-QPushButton{
-
-background:#EEEEEE;
-
-font-weight:bold;
-
-}
-
-QTextEdit{
-
-background:white;
-
-color:black;
-
-font-family:Consolas;
-
-font-size:13px;
-
-}
-
-""")
-    # --------------------------------
+    # ==================================================
+    # Load / Initialize Analyzer
+    # ==================================================
 
     def load_model_action(self):
 
-        self.console.append(
-            "\n[STATUS] Loading Hugging Face Model..."
+        self.result_area.append(
+            "\n[STATUS] Initializing NeuroFence Analyzer..."
         )
 
         try:
 
-            self.loader = ModelLoader()
+            self.analyzer = Analyzer()
 
-            self.loader.load_model()
-
-            self.model_loaded = True
-
-            self.console.append(
-                "[SUCCESS] Model Loaded Successfully!\n"
+            self.result_area.append(
+                "[SUCCESS] NeuroFence Analyzer initialized successfully!\n"
             )
 
         except Exception as e:
 
-            self.console.append(
-                f"[ERROR] {e}\n"
+            self.result_area.append(
+                f"[ERROR] Failed to initialize analyzer: {str(e)}\n"
             )
 
-    # --------------------------------
+
+    # ==================================================
+    # Run Forensic Analysis
+    # ==================================================
 
     def run_analysis_action(self):
 
-        if not self.model_loaded:
+        self.result_area.append(
+            "\n[RUNNING] Starting NeuroFence forensic analysis..."
+        )
 
-            self.console.append(
-                "\n[WARNING] Please load the model first!\n"
+        try:
+
+            # Import main pipeline
+            from main import main
+
+            # Run complete NeuroFence analysis
+            main(
+                log_callback=lambda message:
+                    self.result_area.append(
+                        str(message)
+                    )
             )
 
-            return
+            self.latest_analysis_results = {
+                "status": "Completed"
+            }
 
-        self.run_button.setEnabled(False)
-
-        self.console.append(
-            "\n[STATUS] Starting NeuroFence Analysis...\n"
-        )
-
-        self.thread = QThread()
-
-        self.worker = AnalysisWorker()
-
-        self.worker.moveToThread(self.thread)
-
-        self.thread.started.connect(
-            self.worker.run
-        )
-
-        self.worker.log_signal.connect(
-            self.console.append
-        )
-
-        self.worker.finished.connect(
-            self.analysis_finished
-        )
-
-        self.worker.finished.connect(
-            self.thread.quit
-        )
-
-        self.worker.finished.connect(
-            self.worker.deleteLater
-        )
-
-        self.thread.finished.connect(
-            self.thread.deleteLater
-        )
-
-        self.thread.start()
-
-    # --------------------------------
-
-    def analysis_finished(self):
-
-        self.console.append(
-            "\n[SUCCESS] NeuroFence Analysis Completed."
-        )
-
-        self.console.append(
-            "[SUCCESS] JSON Report Saved."
-        )
-
-        self.console.append(
-            "[SUCCESS] PDF Report Generated.\n"
-        )
-
-        self.run_button.setEnabled(True)
-
-    # --------------------------------
-
-    def report_action(self):
-
-        pdf_path = "Security_Report.pdf"
-
-        if os.path.exists(pdf_path):
-
-            self.console.append(
-                "\n[SUCCESS] Opening Security_Report.pdf..."
+            self.result_area.append(
+                "\n[SUCCESS] Forensic analysis completed successfully."
             )
 
-            os.startfile(pdf_path)
+        except Exception as e:
 
-        else:
-
-            self.console.append(
-                "\n[INFO] Please run analysis first."
+            self.result_area.append(
+                f"\n[ERROR] Analysis failed: {str(e)}"
             )
 
 
-# ------------------------------------
-# Run Application
-# ------------------------------------
+    # ==================================================
+    # Generate PDF Report
+    # ==================================================
+
+    def generate_report_action(self):
+
+        self.result_area.append(
+            "\n[STATUS] Triggering PDF Report Engine..."
+        )
+
+        try:
+
+            reporter = PDFReportGenerator()
+
+            reporter.generate()
+
+            self.result_area.append(
+                "[SUCCESS] PDF Security Report generated successfully!\n"
+            )
+
+        except FileNotFoundError:
+
+            self.result_area.append(
+                "[ERROR] report.json not found. "
+                "Please run the analysis first.\n"
+            )
+
+        except Exception as e:
+
+            self.result_area.append(
+                f"[ERROR] Report generation failed: {str(e)}\n"
+            )
+
+
+# ======================================================
+# Application Entry Point
+# ======================================================
 
 if __name__ == "__main__":
 
@@ -432,4 +414,6 @@ if __name__ == "__main__":
 
     window.show()
 
-    sys.exit(app.exec())
+    sys.exit(
+        app.exec()
+    )
