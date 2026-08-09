@@ -3,14 +3,13 @@ NeuroFence Project
 
 Module: PDF Report Generator
 
-Author: Kailash
-
 Purpose:
 Generate a professional PDF security report
 from the JSON report.
 """
 
 import json
+import os
 
 from reportlab.platypus import (
     SimpleDocTemplate,
@@ -25,23 +24,74 @@ class PDFReportGenerator:
 
     def __init__(
         self,
-        json_file="report.json",
-        pdf_file="Security_Report.pdf"
+        json_file=None,
+        pdf_file=None
     ):
+
+        # Project root directory
+        project_root = os.path.dirname(
+            os.path.dirname(
+                os.path.abspath(__file__)
+            )
+        )
+
+        # Reports directory
+        reports_dir = os.path.join(
+            project_root,
+            "reports"
+        )
+
+        # Create reports directory if it does not exist
+        os.makedirs(
+            reports_dir,
+            exist_ok=True
+        )
+
+        # Default report paths
+        if json_file is None:
+            json_file = os.path.join(
+                reports_dir,
+                "report.json"
+            )
+
+        if pdf_file is None:
+            pdf_file = os.path.join(
+                reports_dir,
+                "Security_Report.pdf"
+            )
 
         self.json_file = json_file
         self.pdf_file = pdf_file
 
     def generate(self):
 
-        with open(self.json_file, "r", encoding="utf-8") as file:
+        # Check JSON file
+        if not os.path.exists(self.json_file):
+
+            raise FileNotFoundError(
+                f"JSON report not found: {self.json_file}"
+            )
+
+        # Read JSON report
+        with open(
+            self.json_file,
+            "r",
+            encoding="utf-8"
+        ) as file:
+
             results = json.load(file)
 
         styles = getSampleStyleSheet()
 
-        document = SimpleDocTemplate(self.pdf_file)
+        document = SimpleDocTemplate(
+            self.pdf_file
+        )
 
         story = []
+
+        # -----------------------------------------
+        # TITLE
+        # -----------------------------------------
 
         story.append(
             Paragraph(
@@ -50,7 +100,13 @@ class PDFReportGenerator:
             )
         )
 
-        story.append(Spacer(1, 20))
+        story.append(
+            Spacer(1, 20)
+        )
+
+        # -----------------------------------------
+        # Counters
+        # -----------------------------------------
 
         high = 0
         suspicious = 0
@@ -60,22 +116,54 @@ class PDFReportGenerator:
         total_confidence = 0
         highest_risk = 0
 
-        for index, result in enumerate(results, start=1):
+        # -----------------------------------------
+        # Individual Results
+        # -----------------------------------------
 
-            risk_score = result.get("risk_score", 0)
-            confidence = result.get("confidence_score", 0)
-            verdict = result.get("verdict", "Unknown")
+        for index, result in enumerate(
+            results,
+            start=1
+        ):
+
+            risk_score = result.get(
+                "risk_score",
+                0
+            )
+
+            confidence = result.get(
+                "confidence_score",
+                0
+            )
+
+            verdict = result.get(
+                "verdict",
+                "Unknown"
+            )
 
             total_risk += risk_score
             total_confidence += confidence
-            highest_risk = max(highest_risk, risk_score)
 
+            highest_risk = max(
+                highest_risk,
+                risk_score
+            )
+
+            # Count verdicts
             if verdict == "High Risk":
+
                 high += 1
+
             elif verdict == "Suspicious":
+
                 suspicious += 1
+
             else:
+
                 safe += 1
+
+            # -------------------------------------
+            # Analysis Heading
+            # -------------------------------------
 
             story.append(
                 Paragraph(
@@ -84,41 +172,56 @@ class PDFReportGenerator:
                 )
             )
 
+            # Prompt
             story.append(
                 Paragraph(
-                    f"<b>Prompt:</b> {result.get('prompt', '-')}",
-                    styles["Heading2"]
-                )
-            )
-
-            story.append(
-                Paragraph(
-                    f"<b>Timestamp:</b> {result.get('timestamp', '-')}",
+                    f"<b>Prompt:</b> "
+                    f"{result.get('prompt', '-')}",
                     styles["Normal"]
                 )
             )
 
             story.append(
-                Paragraph(
-                    f"<b>Risk Score:</b> {risk_score}",
-                    styles["Normal"]
-                )
+                Spacer(1, 5)
             )
 
+            # Timestamp
             story.append(
                 Paragraph(
-                    f"<b>Confidence Score:</b> {confidence}%",
+                    f"<b>Timestamp:</b> "
+                    f"{result.get('timestamp', '-')}",
                     styles["Normal"]
                 )
             )
 
+            # Risk
             story.append(
                 Paragraph(
-                    f"<b>Verdict:</b> {verdict}",
+                    f"<b>Risk Score:</b> "
+                    f"{risk_score}",
                     styles["Normal"]
                 )
             )
 
+            # Confidence
+            story.append(
+                Paragraph(
+                    f"<b>Confidence Score:</b> "
+                    f"{confidence}%",
+                    styles["Normal"]
+                )
+            )
+
+            # Verdict
+            story.append(
+                Paragraph(
+                    f"<b>Verdict:</b> "
+                    f"{verdict}",
+                    styles["Normal"]
+                )
+            )
+
+            # Average Difference
             story.append(
                 Paragraph(
                     f"<b>Average Difference:</b> "
@@ -127,6 +230,7 @@ class PDFReportGenerator:
                 )
             )
 
+            # Maximum Difference
             story.append(
                 Paragraph(
                     f"<b>Maximum Difference:</b> "
@@ -135,6 +239,7 @@ class PDFReportGenerator:
                 )
             )
 
+            # High Risk Layers
             story.append(
                 Paragraph(
                     f"<b>High Risk Layers:</b> "
@@ -144,6 +249,7 @@ class PDFReportGenerator:
                 )
             )
 
+            # High Risk Percentage
             story.append(
                 Paragraph(
                     f"<b>High Risk Percentage:</b> "
@@ -152,13 +258,7 @@ class PDFReportGenerator:
                 )
             )
 
-            story.append(
-                Paragraph(
-                    f"<b>Analysis Status:</b> {verdict}",
-                    styles["Normal"]
-                )
-            )
-
+            # Reason
             story.append(
                 Paragraph(
                     f"<b>Reason:</b> "
@@ -166,6 +266,14 @@ class PDFReportGenerator:
                     styles["Normal"]
                 )
             )
+
+            story.append(
+                Spacer(1, 10)
+            )
+
+            # -------------------------------------
+            # Layer Differences
+            # -------------------------------------
 
             story.append(
                 Paragraph(
@@ -181,14 +289,31 @@ class PDFReportGenerator:
 
             for layer, value in layer_differences.items():
 
+                try:
+
+                    value = round(
+                        float(value),
+                        4
+                    )
+
+                except (TypeError, ValueError):
+
+                    pass
+
                 story.append(
                     Paragraph(
-                        f"{layer} : {round(value, 4)}",
+                        f"{layer} : {value}",
                         styles["Normal"]
                     )
                 )
 
-            story.append(Spacer(1, 20))
+            story.append(
+                Spacer(1, 20)
+            )
+
+        # -----------------------------------------
+        # FINAL SUMMARY
+        # -----------------------------------------
 
         story.append(
             Paragraph(
@@ -199,19 +324,27 @@ class PDFReportGenerator:
 
         total_tests = len(results)
 
-        average_risk = (
-            total_risk / total_tests
-            if total_tests else 0
-        )
+        if total_tests:
 
-        average_confidence = (
-            total_confidence / total_tests
-            if total_tests else 0
-        )
+            average_risk = (
+                total_risk /
+                total_tests
+            )
+
+            average_confidence = (
+                total_confidence /
+                total_tests
+            )
+
+        else:
+
+            average_risk = 0
+            average_confidence = 0
 
         story.append(
             Paragraph(
-                f"<b>Total Prompts Tested:</b> {total_tests}",
+                f"<b>Total Prompts Tested:</b> "
+                f"{total_tests}",
                 styles["Normal"]
             )
         )
@@ -261,6 +394,15 @@ class PDFReportGenerator:
             )
         )
 
+        # -----------------------------------------
+        # BUILD PDF
+        # -----------------------------------------
+
         document.build(story)
 
-        print(f"\n✓ PDF report saved as '{self.pdf_file}'")
+        print(
+            f"\n✓ PDF report saved as:"
+            f"\n{self.pdf_file}"
+        )
+
+        return self.pdf_file
