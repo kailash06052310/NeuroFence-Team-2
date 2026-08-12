@@ -3,8 +3,6 @@ NeuroFence Project
 
 Module: Report Generator
 
-Author: Kailash
-
 Purpose:
 Generate a JSON security report containing
 prompt, layer differences, risk score, verdict,
@@ -12,12 +10,38 @@ and additional detection metrics.
 """
 
 import json
+import os
 from datetime import datetime
 
 
 class ReportGenerator:
 
-    def __init__(self, filename="report.json"):
+    def __init__(self, filename=None):
+
+        # Project root
+        project_root = os.path.dirname(
+            os.path.dirname(
+                os.path.abspath(__file__)
+            )
+        )
+
+        # Reports directory
+        reports_dir = os.path.join(
+            project_root,
+            "reports"
+        )
+
+        os.makedirs(
+            reports_dir,
+            exist_ok=True
+        )
+
+        if filename is None:
+
+            filename = os.path.join(
+                reports_dir,
+                "report.json"
+            )
 
         self.filename = filename
         self.results = []
@@ -39,30 +63,53 @@ class ReportGenerator:
     ):
 
         result = {
-            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+
+            "timestamp":
+                datetime.now().strftime(
+                    "%Y-%m-%d %H:%M:%S"
+                ),
+
             "prompt": prompt,
+
             "risk_score": risk_score,
+
             "verdict": verdict,
 
-            # New Detection Metrics
-            "confidence_score": confidence_score,
-            "average_difference": average_difference,
-            "maximum_difference": maximum_difference,
-            "high_risk_layers": high_risk_layers,
-            "total_layers": total_layers,
-            "high_risk_percentage": high_risk_percentage,
+            "confidence_score":
+                confidence_score,
+
+            "average_difference":
+                average_difference,
+
+            "maximum_difference":
+                maximum_difference,
+
+            "high_risk_layers":
+                high_risk_layers,
+
+            "total_layers":
+                total_layers,
+
+            "high_risk_percentage":
+                high_risk_percentage,
+
             "reason": reason,
+
             "thresholds": thresholds,
 
-            # Existing Layer Analysis
-            "layer_differences": comparison
+            "layer_differences":
+                comparison
         }
 
         self.results.append(result)
 
     def save_report(self):
 
-        with open(self.filename, "w", encoding="utf-8") as file:
+        with open(
+            self.filename,
+            "w",
+            encoding="utf-8"
+        ) as file:
 
             json.dump(
                 self.results,
@@ -70,4 +117,9 @@ class ReportGenerator:
                 indent=4
             )
 
-        print(f"\n✓ JSON report saved as '{self.filename}'")
+        print(
+            f"\n✓ JSON report saved as:"
+            f"\n{self.filename}"
+        )
+
+        return self.filename

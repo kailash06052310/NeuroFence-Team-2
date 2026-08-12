@@ -3,8 +3,6 @@ NeuroFence Project
 
 Module: Analyzer
 
-Author: Kailash
-
 Purpose:
 Analyze neuron activations and compare them with a baseline.
 """
@@ -23,31 +21,25 @@ class Analyzer:
     def create_baseline(self, activations):
         """
         Store baseline activations.
-
-        Parameters:
-            activations (dict): Dictionary received from
-                                ActivationTracker.
         """
 
         self.baseline.clear()
 
         for layer_name, activation in activations.items():
 
-            # Some models return tuple outputs
             if isinstance(activation, tuple):
                 activation = activation[0]
 
-            # Store a copy so future changes don't affect baseline
             self.baseline[layer_name] = activation.clone()
 
-        print(f"✓ Baseline created for {len(self.baseline)} layers.")
+        print(
+            f"✓ Baseline created for {len(self.baseline)} layers."
+        )
 
     def create_average_baseline(self, baseline_list):
         """
-        Create an average baseline from multiple activation dictionaries.
-
-        Parameters:
-            baseline_list (list): List of activation dictionaries.
+        Create an average baseline from multiple
+        activation dictionaries.
         """
 
         self.baseline.clear()
@@ -70,7 +62,7 @@ class Analyzer:
 
                 activations.append(activation)
 
-            # Match sequence lengths before averaging
+            # Match sequence lengths
             min_length = min(
                 activation.shape[1]
                 for activation in activations
@@ -79,6 +71,7 @@ class Analyzer:
             trimmed_activations = []
 
             for activation in activations:
+
                 trimmed_activations.append(
                     activation[:, :min_length, :]
                 )
@@ -88,39 +81,37 @@ class Analyzer:
                 dim=0
             )
 
-            self.baseline[layer_name] = average_activation.clone()
+            self.baseline[layer_name] = (
+                average_activation.clone()
+            )
 
         print(
-            f"✓ Average baseline created using {len(baseline_list)} prompts."
+            f"✓ Average baseline created using "
+            f"{len(baseline_list)} prompts."
         )
+
     def has_baseline(self):
         """
         Check whether a baseline exists.
-
-        Returns:
-            bool
         """
+
         return len(self.baseline) > 0
 
     def get_baseline(self):
         """
         Return stored baseline activations.
-
-        Returns:
-            dict
         """
+
         return self.baseline
-    def calculate_difference(self, baseline_activation, current_activation):
+
+    def calculate_difference(
+        self,
+        baseline_activation,
+        current_activation
+    ):
         """
-        Calculate the mean absolute difference between
-        baseline and current activations.
-
-        Parameters:
-            baseline_activation (Tensor)
-            current_activation (Tensor)
-
-        Returns:
-            float
+        Calculate mean absolute difference
+        between baseline and current activations.
         """
 
         if isinstance(baseline_activation, tuple):
@@ -129,30 +120,32 @@ class Analyzer:
         if isinstance(current_activation, tuple):
             current_activation = current_activation[0]
 
-        # Match sequence lengths before comparison
+        # Match sequence lengths
         min_length = min(
             baseline_activation.shape[1],
             current_activation.shape[1]
         )
 
-        baseline_activation = baseline_activation[:, :min_length, :]
-        current_activation = current_activation[:, :min_length, :]
+        baseline_activation = (
+            baseline_activation[:, :min_length, :]
+        )
+
+        current_activation = (
+            current_activation[:, :min_length, :]
+        )
 
         difference = torch.mean(
-            torch.abs(current_activation - baseline_activation)
+            torch.abs(
+                current_activation -
+                baseline_activation
+            )
         )
 
         return difference.item()
 
     def compare_with_baseline(self, current_activations):
         """
-        Compare current activations with the stored baseline.
-
-        Parameters:
-            current_activations (dict)
-
-        Returns:
-            dict
+        Compare current activations with baseline.
         """
 
         if not self.has_baseline():
@@ -178,13 +171,7 @@ class Analyzer:
 
     def get_risk_level(self, score):
         """
-        Convert difference score into a risk level.
-
-        Parameters:
-            score (float)
-
-        Returns:
-            str
+        Convert difference score into risk level.
         """
 
         if score < 0.05:
@@ -198,13 +185,7 @@ class Analyzer:
 
     def generate_report(self, comparison_results):
         """
-        Generate a readable analysis report.
-
-        Parameters:
-            comparison_results (dict)
-
-        Returns:
-            dict
+        Generate readable analysis report.
         """
 
         report = {}
