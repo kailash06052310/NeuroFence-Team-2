@@ -1,4 +1,5 @@
 import torch
+from visualizer import NeuronVisualizer
 
 from detection_logic import DetectionLogic
 from report_generator import ReportGenerator
@@ -67,6 +68,8 @@ def main(
     analyzer = Analyzer()
 
     detector = DetectionLogic()
+
+    visualizer = NeuronVisualizer()
 
     report_generator = ReportGenerator()
 
@@ -144,7 +147,9 @@ def main(
         report = analyzer.generate_report(
             comparison
         )
-
+        visualization = visualizer.analyze(
+                    current_activations
+                )
         log("\nAnalysis Report:", log_callback)
 
         for layer, result in report.items():
@@ -224,7 +229,45 @@ def main(
             "======================================",
             log_callback
         )
+        log(
+            "\nHeatmap:",
+            log_callback
+        )
 
+        for layer, data in visualization["heatmap"].items():
+
+            log(
+                f"{layer} | "
+                f"{data['normalized_activity']} | "
+                f"{data['color']}",
+                log_callback
+            )
+        stats = visualization["statistics"]
+
+        log(
+            "\n========== Neuron Visualization ==========",
+            log_callback
+        )
+
+        log(
+            f"Highest Layer : {stats['highest_layer']}",
+            log_callback
+        )
+
+        log(
+            f"Highest Activity : {stats['highest_activity']}",
+            log_callback
+        )
+
+        log(
+            f"Average Activity : {stats['average_activity']}",
+            log_callback
+        )
+
+        log(
+            f"High Risk Layers : {stats['high_risk_layers']}",
+            log_callback
+        )
     # ------------------------------------
     # Save Reports
     # ------------------------------------
