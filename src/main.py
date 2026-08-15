@@ -16,10 +16,8 @@ from analyzer import Analyzer
 # --------------------------------------------------
 
 def log(message, log_callback=None):
-
     if log_callback:
         log_callback(message)
-
     else:
         print(message)
 
@@ -31,7 +29,8 @@ def log(message, log_callback=None):
 def main(
     model=None,
     tokenizer=None,
-    log_callback=None
+    log_callback=None,
+    custom_prompt=None
 ):
 
     # ------------------------------------
@@ -42,7 +41,6 @@ def main(
 
         loader = ModelLoader()
         model, tokenizer = loader.load_model()
-
         model_name = loader.model_name
 
     else:
@@ -52,7 +50,6 @@ def main(
     log("\n==============================", log_callback)
     log(" NeuroFence", log_callback)
     log("==============================", log_callback)
-
     log(f"\nModel Loaded : {model_name}", log_callback)
 
     # ------------------------------------
@@ -60,242 +57,287 @@ def main(
     # ------------------------------------
 
     tracker = ActivationTracker()
-
     tracker.register_hooks(model)
 
     fuzzer = PromptFuzzer()
-
     analyzer = Analyzer()
-
     detector = DetectionLogic()
-
     visualizer = NeuronVisualizer()
-
     report_generator = ReportGenerator()
-
     pdf_generator = PDFReportGenerator()
 
-    # ------------------------------------
-    # STEP 1 : Create Average Baseline
-    # ------------------------------------
+    try:
 
-    log("\n========== Creating Average Baseline ==========", log_callback)
-
-    normal_prompts = fuzzer.get_normal_prompts()[:5]
-
-    baseline_list = []
-
-    for i, prompt in enumerate(normal_prompts, start=1):
-
-        log(f"\nBaseline {i}: {prompt}", log_callback)
-
-        tracker.clear_activations()
-
-        inputs = tokenizer(
-            prompt,
-            return_tensors="pt"
-        )
-
-        with torch.no_grad():
-            model(**inputs)
-
-        baseline_activations = tracker.get_all_activations()
-
-        baseline_list.append(
-            baseline_activations
-        )
-
-    analyzer.create_average_baseline(
-        baseline_list
-    )
-
-    log(
-        "\n✓ Average Baseline Created Successfully.",
-        log_callback
-    )
         # ------------------------------------
-    # STEP 2 : Test Adversarial Prompts
-    # ------------------------------------
+        # STEP 1 : Create Average Baseline
+        # ------------------------------------
 
-    log(
-        "\n========== Testing Adversarial Prompts ==========",
-        log_callback
-    )
-
-    test_prompts = fuzzer.get_adversarial_prompts()[:5]
-
-    for i, test_prompt in enumerate(test_prompts, start=1):
-
-        log(f"\nTest {i}: {test_prompt}", log_callback)
-
-        tracker.clear_activations()
-
-        inputs = tokenizer(
-            test_prompt,
-            return_tensors="pt"
+        log(
+            "\n========== Creating Average Baseline ==========",
+            log_callback
         )
 
-        with torch.no_grad():
-            model(**inputs)
+        normal_prompts = fuzzer.get_normal_prompts()[:10]
+        baseline_list = []
 
-        current_activations = tracker.get_all_activations()
+        for i, prompt in enumerate(normal_prompts, start=1):
 
-        comparison = analyzer.compare_with_baseline(
-            current_activations
+            log(
+                f"\nBaseline {i}: {prompt}",
+                log_callback
+            )
+
+            tracker.clear_activations()
+
+            inputs = tokenizer(
+                prompt,
+                return_tensors="pt"
+            )
+
+            with torch.no_grad():
+                model(**inputs)
+
+            baseline_activations = tracker.get_all_activations()
+
+            baseline_list.append(
+                baseline_activations
+            )
+
+        analyzer.create_average_baseline(
+            baseline_list
         )
 
-        report = analyzer.generate_report(
-            comparison
+        log(
+            "\n✓ Average Baseline Created Successfully.",
+            log_callback
         )
-        visualization = visualizer.analyze(
-                    current_activations
+
+        # ------------------------------------
+        # STEP 2 : Select Prompts
+        # ------------------------------------
+
+        if custom_prompt and custom_prompt.strip():
+
+            # Custom prompt mode: analyze only the prompt entered
+            # from the NeuroFence GUI.
+            test_prompts = [custom_prompt.strip()]
+
+            log(
+                "\n========== Testing Custom Prompt ==========",
+                log_callback
+            )
+
+        else:
+
+            # Normal mode: keep the existing workflow unchanged.
+            test_prompts = fuzzer.get_adversarial_prompts()[:5]
+
+            log(
+                "\n========== Testing Adversarial Prompts ==========",
+                log_callback
+            )
+
+        # ------------------------------------
+        # STEP 3 : Analyze Selected Prompts
+        # ------------------------------------
+
+        for i, test_prompt in enumerate(test_prompts, start=1):
+
+            if custom_prompt and custom_prompt.strip():
+                log(
+                    f"\nCustom Prompt: {test_prompt}",
+                    log_callback
                 )
-        log("\nAnalysis Report:", log_callback)
+            else:
+                log(
+                    f"\nTest {i}: {test_prompt}",
+                    log_callback
+                )
 
-        for layer, result in report.items():
+            tracker.clear_activations()
+
+            inputs = tokenizer(
+                test_prompt,
+                return_tensors="pt"
+            )
+
+            with torch.no_grad():
+                model(**inputs)
+
+            current_activations = tracker.get_all_activations()
+
+            comparison = analyzer.compare_with_baseline(
+                current_activations
+            )
+
+            report = analyzer.generate_report(
+                comparison
+            )
+
+            visualization = visualizer.analyze(
+                current_activations
+            )
 
             log(
-                f"{layer} | "
-                f"Difference: {result['difference']} | "
-                f"Risk: {result['risk']}",
+                "\nAnalysis Report:",
+                log_callback
+            )
+
+            for layer, result in report.items():
+
+                log(
+                    f"{layer} | "
+                    f"Difference: {result['difference']} | "
+                    f"Risk: {result['risk']}",
+                    log_callback
+                )
+
+            # ------------------------------------
+            # Detection Result
+            # ------------------------------------
+
+            detection_result = detector.detect(
+                comparison,
+                prompt=test_prompt
+            )
+
+            report_generator.add_result(
+                prompt=test_prompt,
+                comparison=comparison,
+                risk_score=detection_result["risk_score"],
+                verdict=detection_result["verdict"],
+                confidence_score=detection_result["confidence_score"],
+                average_difference=detection_result["average_difference"],
+                maximum_difference=detection_result["maximum_difference"],
+                high_risk_layers=detection_result["high_risk_layers"],
+                total_layers=detection_result["total_layers"],
+                high_risk_percentage=detection_result["high_risk_percentage"],
+                reason=detection_result["reason"],
+                thresholds=detection_result["thresholds"]
+            )
+
+            log(
+                "\n========== Detection Result ==========",
+                log_callback
+            )
+
+            log(
+                f"Risk Score : {detection_result['risk_score']}",
+                log_callback
+            )
+
+            log(
+                f"Verdict    : {detection_result['verdict']}",
+                log_callback
+            )
+
+            log(
+                f"Confidence : {detection_result['confidence_score']}%",
+                log_callback
+            )
+
+            log(
+                f"Avg Diff   : {detection_result['average_difference']}",
+                log_callback
+            )
+
+            log(
+                f"Max Diff   : {detection_result['maximum_difference']}",
+                log_callback
+            )
+
+            log(
+                f"High Layers: "
+                f"{detection_result['high_risk_layers']} / "
+                f"{detection_result['total_layers']}",
+                log_callback
+            )
+
+            log(
+                f"Reason     : {detection_result['reason']}",
+                log_callback
+            )
+
+            log(
+                "======================================",
+                log_callback
+            )
+
+            # ------------------------------------
+            # Neuron Visualization
+            # ------------------------------------
+
+            log(
+                "\nHeatmap:",
+                log_callback
+            )
+
+            for layer, data in visualization["heatmap"].items():
+
+                log(
+                    f"{layer} | "
+                    f"{data['normalized_activity']} | "
+                    f"{data['color']}",
+                    log_callback
+                )
+
+            stats = visualization["statistics"]
+
+            log(
+                "\n========== Neuron Visualization ==========",
+                log_callback
+            )
+
+            log(
+                f"Highest Layer : {stats['highest_layer']}",
+                log_callback
+            )
+
+            log(
+                f"Highest Activity : {stats['highest_activity']}",
+                log_callback
+            )
+
+            log(
+                f"Average Activity : {stats['average_activity']}",
+                log_callback
+            )
+
+            log(
+                f"High Risk Layers : {stats['high_risk_layers']}",
                 log_callback
             )
 
         # ------------------------------------
-        # Detection Result
+        # Save Reports
         # ------------------------------------
 
-        detection_result = detector.detect(
-            comparison
-        )
-        report_generator.add_result(
-            prompt=test_prompt,
-            comparison=comparison,
-            risk_score=detection_result["risk_score"],
-            verdict=detection_result["verdict"],
-
-            # New Detection Metrics
-            confidence_score=detection_result["confidence_score"],
-            average_difference=detection_result["average_difference"],
-            maximum_difference=detection_result["maximum_difference"],
-            high_risk_layers=detection_result["high_risk_layers"],
-            total_layers=detection_result["total_layers"],
-            high_risk_percentage=detection_result["high_risk_percentage"],
-            reason=detection_result["reason"],
-            thresholds=detection_result["thresholds"]
-)
+        report_generator.save_report()
 
         log(
-            "\n========== Detection Result ==========",
+            "\n✓ JSON Report Saved Successfully.",
+            log_callback
+        )
+
+        pdf_generator.generate()
+
+        log(
+            "✓ PDF Report Generated Successfully.",
             log_callback
         )
 
         log(
-            f"Risk Score : {detection_result['risk_score']}",
+            "\n✓ NeuroFence Analysis Completed.",
             log_callback
         )
 
-        log(
-            f"Verdict    : {detection_result['verdict']}",
-            log_callback
-        )
-        log(
-            f"Confidence : {detection_result['confidence_score']}%",
-            log_callback
-        )
+    finally:
 
-        log(
-            f"Avg Diff   : {detection_result['average_difference']}",
-            log_callback
-        )
+        # ------------------------------------
+        # Cleanup
+        # ------------------------------------
 
-        log(
-            f"Max Diff   : {detection_result['maximum_difference']}",
-            log_callback
-        )
-
-        log(
-            f"High Layers: "
-            f"{detection_result['high_risk_layers']} / "
-            f"{detection_result['total_layers']}",
-            log_callback
-        )
-
-        log(
-            f"Reason     : {detection_result['reason']}",
-            log_callback
-        )
-        log(
-            "======================================",
-            log_callback
-        )
-        log(
-            "\nHeatmap:",
-            log_callback
-        )
-
-        for layer, data in visualization["heatmap"].items():
-
-            log(
-                f"{layer} | "
-                f"{data['normalized_activity']} | "
-                f"{data['color']}",
-                log_callback
-            )
-        stats = visualization["statistics"]
-
-        log(
-            "\n========== Neuron Visualization ==========",
-            log_callback
-        )
-
-        log(
-            f"Highest Layer : {stats['highest_layer']}",
-            log_callback
-        )
-
-        log(
-            f"Highest Activity : {stats['highest_activity']}",
-            log_callback
-        )
-
-        log(
-            f"Average Activity : {stats['average_activity']}",
-            log_callback
-        )
-
-        log(
-            f"High Risk Layers : {stats['high_risk_layers']}",
-            log_callback
-        )
-    # ------------------------------------
-    # Save Reports
-    # ------------------------------------
-
-    report_generator.save_report()
-
-    log(
-        "\n✓ JSON Report Saved Successfully.",
-        log_callback
-    )
-
-    pdf_generator.generate()
-
-    log(
-        "✓ PDF Report Generated Successfully.",
-        log_callback
-    )
-
-    # ------------------------------------
-    # Cleanup
-    # ------------------------------------
-
-    tracker.remove_hooks()
-
-    log(
-        "\n✓ NeuroFence Analysis Completed.",
-        log_callback
-    )
+        tracker.remove_hooks()
 
 
 # ------------------------------------
@@ -303,5 +345,4 @@ def main(
 # ------------------------------------
 
 if __name__ == "__main__":
-
     main()
