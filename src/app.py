@@ -37,6 +37,7 @@ from PyQt6.QtWidgets import (
     QProgressBar,
     QTableWidget,
     QTableWidgetItem,
+    QLineEdit,
     QHeaderView,
     QMessageBox,
 )
@@ -91,10 +92,11 @@ class AnalysisWorker(QObject):
     finished = pyqtSignal()
     log_signal = pyqtSignal(str)
 
-    def __init__(self, model, tokenizer):
+    def __init__(self, model, tokenizer, custom_prompt=None):
         super().__init__()
         self.model = model
         self.tokenizer = tokenizer
+        self.custom_prompt = custom_prompt
 
     def run(self):
 
@@ -102,7 +104,8 @@ class AnalysisWorker(QObject):
             main(
                 model=self.model,
                 tokenizer=self.tokenizer,
-                log_callback=self.log_signal.emit
+                log_callback=self.log_signal.emit,
+                custom_prompt=self.custom_prompt
             )
 
         except Exception as e:
@@ -125,7 +128,7 @@ class NeuroFenceApp(QMainWindow):
         super().__init__()
 
         self.setWindowTitle(
-            "NeuroFence - LLM Forensic & Security Suite"
+            "NeuroFence - LLM Analysis Dashboard"
         )
 
         self.setMinimumSize(1050, 760)
@@ -185,12 +188,12 @@ class NeuroFenceApp(QMainWindow):
         title_box.setSpacing(2)
 
         self.title = QLabel(
-            "🚀 NeuroFence Forensic Security Dashboard"
+            "🚀 NeuroFence Analysis Dashboard"
         )
         self.title.setObjectName("titleLabel")
 
         self.subtitle = QLabel(
-            "LLM Hidden-Activation Security Analysis"
+            "LLM Hidden-Activation Analysis"
         )
         self.subtitle.setObjectName("subtitleLabel")
 
@@ -254,6 +257,34 @@ class NeuroFenceApp(QMainWindow):
         buttons.addStretch()
 
         layout.addLayout(buttons)
+
+        # --------------------------------------------------
+        # Custom Prompt
+        # --------------------------------------------------
+        custom_prompt_layout = QHBoxLayout()
+        self.custom_prompt_input = QLineEdit()
+        self.custom_prompt_input.setPlaceholderText(
+            "Enter a prompt to analyze (optional)..."
+        )
+        self.custom_prompt_button = QPushButton(
+            "🧪 Analyze Prompt"
+        )
+        self.custom_prompt_button.setEnabled(False)
+
+        self.custom_prompt_input.returnPressed.connect(
+            self.run_custom_prompt_action
+        )
+        self.custom_prompt_button.clicked.connect(
+            self.run_custom_prompt_action
+        )
+
+        custom_prompt_layout.addWidget(
+            self.custom_prompt_input
+        )
+        custom_prompt_layout.addWidget(
+            self.custom_prompt_button
+        )
+        layout.addLayout(custom_prompt_layout)
 
         # --------------------------------------------------
         # Progress Section
@@ -504,7 +535,7 @@ class NeuroFenceApp(QMainWindow):
             QHeaderView.ResizeMode.ResizeToContents
         )
 
-        self.heatmap.setMinimumHeight(220)
+        self.heatmap.setFixedHeight(250)
 
         heatmap_layout.addWidget(
             self.heatmap
@@ -515,6 +546,8 @@ class NeuroFenceApp(QMainWindow):
         # --------------------------------------------------
 
         legend = QHBoxLayout()
+        legend.setContentsMargins(0, 6, 0, 0)
+        legend.setSpacing(8)
 
         legend_title = QLabel("Legend:")
         legend_title.setObjectName(
@@ -965,6 +998,7 @@ class NeuroFenceApp(QMainWindow):
 
         self.load_button.setEnabled(False)
         self.run_button.setEnabled(False)
+        self.custom_prompt_button.setEnabled(False)
         self.report_button.setEnabled(False)
 
         self.console.append(
@@ -1075,12 +1109,13 @@ class NeuroFenceApp(QMainWindow):
 
         if self.model_loaded:
             self.run_button.setEnabled(True)
+            self.custom_prompt_button.setEnabled(True)
 
     # ======================================================
     # RUN ANALYSIS
     # ======================================================
 
-    def run_analysis_action(self):
+    def run_analysis_action(self, custom_prompt=None):
 
         if not self.model_loaded:
 
@@ -1099,15 +1134,21 @@ class NeuroFenceApp(QMainWindow):
         self.analysis_running = True
 
         self.run_button.setEnabled(False)
+        self.custom_prompt_button.setEnabled(False)
         self.load_button.setEnabled(False)
         self.report_button.setEnabled(False)
 
         self.reset_result_cards()
         self.clear_heatmap()
 
-        self.console.append(
-            "\n[STATUS] Starting NeuroFence Analysis...\n"
-        )
+        if custom_prompt:
+            self.console.append(
+                "\n[STATUS] Analyzing custom prompt...\n"
+            )
+        else:
+            self.console.append(
+                "\n[STATUS] Starting NeuroFence Analysis...\n"
+            )
 
         self.progress_label.setText(
             "Running analysis..."
@@ -1122,7 +1163,8 @@ class NeuroFenceApp(QMainWindow):
         self.thread = QThread()
         self.worker = AnalysisWorker(
             self.model,
-            self.tokenizer
+            self.tokenizer,
+            custom_prompt=custom_prompt
         )
 
         self.worker.moveToThread(
@@ -1158,6 +1200,17 @@ class NeuroFenceApp(QMainWindow):
         )
 
         self.thread.start()
+
+    def run_custom_prompt_action(self):
+        prompt = self.custom_prompt_input.text().strip()
+
+        if not prompt:
+            self.console.append(
+                "\n[WARNING] Please enter a prompt first."
+            )
+            return
+
+        self.run_analysis_action(custom_prompt=prompt)
 
     # ======================================================
     # BACKEND LOG PROCESSING
@@ -1804,6 +1857,10 @@ class NeuroFenceApp(QMainWindow):
             self.model_loaded
         )
 
+        self.custom_prompt_button.setEnabled(
+            self.model_loaded
+        )
+
         self.load_button.setEnabled(
             True
         )
@@ -1827,33 +1884,23 @@ class NeuroFenceApp(QMainWindow):
         )
 
         paths = [
-            os.path.join(
-                os.getcwd(),
-                "Security_Report.pdf"
-            ),
-            os.path.join(
-                base,
-                "Security_Report.pdf"
-            ),
-            os.path.abspath(
-                os.path.join(
-                    base,
-                    "..",
-                    "Security_Report.pdf"
-                )
-            ),
+            os.path.join(os.getcwd(), "Security_Report.pdf"),
+            os.path.join(base, "Security_Report.pdf"),
+            os.path.join(base, "..", "Security_Report.pdf"),
+            os.path.join(base, "..", "reports", "Security_Report.pdf"),
+            os.path.join(base, "reports", "Security_Report.pdf"),
         ]
 
-        pdf = next(
-            (
-                os.path.abspath(path)
-                for path in paths
-                if os.path.exists(
-                    os.path.abspath(path)
-                )
-            ),
-            None
-        )
+        existing = [
+            os.path.abspath(path)
+            for path in paths
+            if os.path.isfile(os.path.abspath(path))
+        ]
+
+        pdf = max(
+            existing,
+            key=os.path.getmtime
+        ) if existing else None
 
         if not pdf:
 

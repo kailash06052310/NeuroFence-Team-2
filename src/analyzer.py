@@ -1,88 +1,74 @@
 """
-NeuroFence Project
-
-Module: Analyzer
-
-Purpose:
-Analyze neuron activations and compare them with a baseline.
+NeuroFence Analyzer
+Normalized activation comparison against a multi-prompt normal baseline.
 """
-
 import torch
 
 
 class Analyzer:
 
     def __init__(self):
-        """
-        Initialize baseline storage.
-        """
         self.baseline = {}
+        self.baseline_mean = {}
+        self.baseline_std = {}
+
+    def _tensor(self, activation):
+        if isinstance(activation, tuple):
+            activation = activation[0]
+        return activation
+
+    def _activity(self, activation):
+        activation = self._tensor(activation)
+        return float(torch.mean(torch.abs(activation)).item())
 
     def create_baseline(self, activations):
-        """
-        Store baseline activations.
-        """
-
         self.baseline.clear()
+        self.baseline_mean.clear()
+        self.baseline_std.clear()
 
-        for layer_name, activation in activations.items():
+        for name, activation in activations.items():
+            activation = self._tensor(activation)
+            self.baseline[name] = activation.clone()
+            self.baseline_mean[name] = self._activity(activation)
+            self.baseline_std[name] = 0.0
 
-            if isinstance(activation, tuple):
-                activation = activation[0]
-
-            self.baseline[layer_name] = activation.clone()
-
-        print(
-            f"✓ Baseline created for {len(self.baseline)} layers."
-        )
+        print(f"✓ Baseline created for {len(self.baseline)} layers.")
 
     def create_average_baseline(self, baseline_list):
-        """
-        Create an average baseline from multiple
-        activation dictionaries.
-        """
-
         self.baseline.clear()
+        self.baseline_mean.clear()
+        self.baseline_std.clear()
 
         if not baseline_list:
             return
 
-        layer_names = baseline_list[0].keys()
+        for name in baseline_list[0].keys():
+            tensors = []
+            values = []
 
-        for layer_name in layer_names:
+            for data in baseline_list:
+                if name not in data:
+                    continue
+                activation = self._tensor(data[name])
+                tensors.append(activation)
+                values.append(self._activity(activation))
 
-            activations = []
+            if not tensors:
+                continue
 
-            for activation_dict in baseline_list:
+            min_length = min(x.shape[1] for x in tensors)
+            trimmed = [x[:, :min_length, :] for x in tensors]
 
-                activation = activation_dict[layer_name]
+            self.baseline[name] = torch.mean(
+                torch.stack(trimmed), dim=0
+            ).clone()
 
-                if isinstance(activation, tuple):
-                    activation = activation[0]
-
-                activations.append(activation)
-
-            # Match sequence lengths
-            min_length = min(
-                activation.shape[1]
-                for activation in activations
+            value_tensor = torch.tensor(values, dtype=torch.float32)
+            self.baseline_mean[name] = float(
+                torch.mean(value_tensor).item()
             )
-
-            trimmed_activations = []
-
-            for activation in activations:
-
-                trimmed_activations.append(
-                    activation[:, :min_length, :]
-                )
-
-            average_activation = torch.mean(
-                torch.stack(trimmed_activations),
-                dim=0
-            )
-
-            self.baseline[layer_name] = (
-                average_activation.clone()
+            self.baseline_std[name] = float(
+                torch.std(value_tensor, unbiased=False).item()
             )
 
         print(
@@ -91,110 +77,71 @@ class Analyzer:
         )
 
     def has_baseline(self):
-        """
-        Check whether a baseline exists.
-        """
-
         return len(self.baseline) > 0
 
     def get_baseline(self):
-        """
-        Return stored baseline activations.
-        """
-
         return self.baseline
 
-    def calculate_difference(
-        self,
-        baseline_activation,
-        current_activation
-    ):
-        """
-        Calculate mean absolute difference
-        between baseline and current activations.
-        """
+    def calculate_difference(self, baseline_activation, current_activation):
+        baseline_activation = self._tensor(baseline_activation)
+        current_activation = self._tensor(current_activation)
 
-        if isinstance(baseline_activation, tuple):
-            baseline_activation = baseline_activation[0]
-
-        if isinstance(current_activation, tuple):
-            current_activation = current_activation[0]
-
-        # Match sequence lengths
         min_length = min(
             baseline_activation.shape[1],
             current_activation.shape[1]
         )
 
-        baseline_activation = (
-            baseline_activation[:, :min_length, :]
-        )
+        baseline_activation = baseline_activation[:, :min_length, :]
+        current_activation = current_activation[:, :min_length, :]
 
-        current_activation = (
-            current_activation[:, :min_length, :]
-        )
-
-        difference = torch.mean(
-            torch.abs(
-                current_activation -
-                baseline_activation
-            )
-        )
-
-        return difference.item()
+        return torch.mean(
+            torch.abs(current_activation - baseline_activation)
+        ).item()
 
     def compare_with_baseline(self, current_activations):
-        """
-        Compare current activations with baseline.
-        """
-
         if not self.has_baseline():
-            raise ValueError(
-                "Baseline has not been created."
-            )
+            raise ValueError("Baseline has not been created.")
 
         results = {}
 
-        for layer_name in self.baseline:
-
-            if layer_name not in current_activations:
+        for name in self.baseline:
+            if name not in current_activations:
                 continue
 
-            diff = self.calculate_difference(
-                self.baseline[layer_name],
-                current_activations[layer_name]
+            current = self._activity(current_activations[name])
+            mean = self.baseline_mean.get(
+                name, self._activity(self.baseline[name])
             )
+            std = self.baseline_std.get(name, 0.0)
 
-            results[layer_name] = diff
+            relative = abs(current - mean) / max(abs(mean), 1e-6)
+
+            if std > 1e-6:
+                z = abs(current - mean) / std
+                score = min(
+                    (relative * 0.5) +
+                    (min(z, 6.0) / 6.0 * 0.5),
+                    1.0
+                )
+            else:
+                score = min(relative, 1.0)
+
+            results[name] = float(score)
 
         return results
 
     def get_risk_level(self, score):
-        """
-        Convert difference score into risk level.
-        """
-
-        if score < 0.05:
+        if score < 0.20:
             return "Normal"
-
-        elif score < 0.20:
+        if score < 0.50:
             return "Suspicious"
-
-        else:
-            return "High Risk"
+        return "High Risk"
 
     def generate_report(self, comparison_results):
-        """
-        Generate readable analysis report.
-        """
-
-        report = {}
-
-        for layer_name, score in comparison_results.items():
-
-            report[layer_name] = {
+        return {
+            name: {
                 "difference": round(score, 6),
                 "risk": self.get_risk_level(score)
             }
-
-        return report
+            for name, score in comparison_results.items()
+        }
